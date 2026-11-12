@@ -226,7 +226,13 @@ export class GatewayAuthPlugin<
 			}
 		}
 
-		if (token?.isValueModified()) {
+		// The data token carries the access token's expiry, so a new access token
+		// needs a new data token even when no value changed.
+		const isDataTokenStale =
+			token?.isValueModified() ||
+			(token?.isAccessTokenModified() && Object.keys(token.values).length > 0);
+
+		if (token && isDataTokenStale) {
 			const dataToken = await token.createDataJWT(this.signer);
 			if (dataToken) {
 				this.tokenSource.setDataToken(

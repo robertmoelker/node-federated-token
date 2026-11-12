@@ -34,3 +34,7 @@ header clients `x-refresh-token` on the refresh mutation alone. Any other
 request carrying it runs without the expired token (anonymously if it was the
 access token) instead of getting a 401, and a resolver minting an anonymous
 session would replace the user's refresh token.
+
+The data token expires with the earliest access token, because clients read
+the session expiry from it to know when to refresh. The gateway therefore
+re-signs it when the access token changes.

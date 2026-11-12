@@ -157,6 +157,7 @@ describe("GatewayAuthPlugin", async () => {
 		expect(context.res.statusCode).toBe(200);
 		expect(context.res.get("x-access-token")).toBeDefined();
 		expect(context.res.get("x-refresh-token")).toBeDefined();
+		expect(context.res.get("x-data-token")).toBeUndefined();
 	});
 
 	it("Use generated token", async () => {
@@ -274,6 +275,38 @@ describe("GatewayAuthPlugin", async () => {
 
 		assert.isNotEmpty(newAccessToken);
 		assert.notEqual(newAccessToken, accessToken);
+
+		const refreshedContext = {
+			federatedToken: new PublicFederatedToken(),
+			res: httpMocks.createResponse(),
+			req: httpMocks.createRequest({
+				headers: {
+					"x-access-token": `Bearer ${accessToken}`,
+					"x-data-token": newAccessToken,
+				},
+			}),
+		};
+
+		await testServer.executeOperation(
+			{
+				query: "query testToken { testToken(create: true) }",
+				http: {
+					headers: new HeaderMap(),
+					method: "POST",
+					search: "",
+					body: "",
+				},
+			},
+			{
+				contextValue: refreshedContext,
+			},
+		);
+		const resignedDataToken = refreshedContext.res.get("x-data-token");
+
+		assert(typeof resignedDataToken === "string");
+		const { payload } = await signer.verifyJWT(resignedDataToken);
+		expect(payload.values).toStrictEqual({ value: "foobar" });
+		expect(payload.exp).toBe(refreshedContext.federatedToken.tokens.foo.exp);
 	});
 
 	it("should clear invalid refresh token and let request reach resolver", async () => {

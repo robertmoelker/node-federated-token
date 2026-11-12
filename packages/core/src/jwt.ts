@@ -11,6 +11,10 @@ type JWTPayload = {
 	[key: string]: unknown;
 };
 
+type LoadDataJWTOptions = {
+	allowExpired?: boolean;
+};
+
 export class PublicFederatedToken extends FederatedToken {
 	// Create the access JWT. This JWT is sent to the client. It is sent as
 	// signed token (not encrypted). The jwe attribute is encrypted, however.
@@ -24,14 +28,22 @@ export class PublicFederatedToken extends FederatedToken {
 			return;
 		}
 
-		const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 90;
 		const payload = {
 			values: this.values,
-			exp,
+			exp: this.getDataExpireTime(),
 			sub: signer.getSubject(this),
 		};
 
 		return await signer.signJWT(payload);
+	}
+
+	// Clients read the session expiry from the data token, so it ends with the
+	// first access token. Without an access token there is nothing to follow.
+	private getDataExpireTime(): number {
+		if (Object.keys(this.tokens).length > 0) {
+			return this.getExpireTime();
+		}
+		return Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 90;
 	}
 
 	// Create the access JWT. This JWT is sent to the client. Is used in the
@@ -53,7 +65,7 @@ export class PublicFederatedToken extends FederatedToken {
 	async loadDataJWT(
 		signer: TokenSigner,
 		value: string,
-		{ allowExpired = false }: { allowExpired?: boolean } = {},
+		options: LoadDataJWTOptions = {},
 	) {
 		let payload: Record<string, unknown>;
 		try {
@@ -63,7 +75,9 @@ export class PublicFederatedToken extends FederatedToken {
 			}
 			payload = result.payload;
 		} catch (e: unknown) {
-			if (!(allowExpired && e instanceof TokenExpiredError && e.payload)) {
+			if (
+				!(options.allowExpired && e instanceof TokenExpiredError && e.payload)
+			) {
 				throw e;
 			}
 			payload = e.payload;
